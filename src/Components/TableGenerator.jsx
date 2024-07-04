@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import "./TableGenerator.css";
 
 const TableGenerator = ({ rows, columns }) => {
@@ -7,6 +7,8 @@ const TableGenerator = ({ rows, columns }) => {
       Array.from({ length: columns }, () => "")
     )
   );
+  const [selectedRow, setSelectedRow] = useState(null);
+  const tableRef = useRef();
 
   useEffect(() => {
     setTableData(
@@ -20,6 +22,36 @@ const TableGenerator = ({ rows, columns }) => {
     const updatedTableData = [...tableData];
     updatedTableData[rowIndex][colIndex] = value;
     setTableData(updatedTableData);
+  };
+
+  const handleKeyDown = (e) => {
+    if (selectedRow !== null) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        addRow(selectedRow);
+      } else if (e.key === "Backspace" && tableData.length > 1) {
+        e.preventDefault();
+        deleteRow(selectedRow);
+      }
+    }
+  };
+
+  const addRow = (rowIndex) => {
+    const updatedTableData = [
+      ...tableData.slice(0, rowIndex + 1),
+      Array.from({ length: columns }, () => ""),
+      ...tableData.slice(rowIndex + 1)
+    ];
+    setTableData(updatedTableData);
+  };
+
+  const deleteRow = (rowIndex) => {
+    const updatedTableData = tableData.filter((_, i) => i !== rowIndex);
+    setTableData(updatedTableData);
+  };
+
+  const handleRowClick = (rowIndex) => {
+    setSelectedRow(rowIndex);
   };
 
   const generateTableHTML = () => {
@@ -39,11 +71,20 @@ const TableGenerator = ({ rows, columns }) => {
 
   return (
     <div className="table-generator-container">
-      <div className="table-display">
+      <div
+        className="table-display"
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+        ref={tableRef}
+      >
         <table border="1" style={{ borderCollapse: "collapse" }}>
           <tbody>
             {tableData.map((row, rowIndex) => (
-              <tr key={rowIndex}>
+              <tr
+                key={rowIndex}
+                onClick={() => handleRowClick(rowIndex)}
+                className={selectedRow === rowIndex ? "selected" : ""}
+              >
                 {row.map((cell, colIndex) => (
                   <td key={colIndex}>
                     <input
@@ -60,7 +101,11 @@ const TableGenerator = ({ rows, columns }) => {
           </tbody>
         </table>
       </div>
-      <textarea className="html-display" value={tableHTML} readOnly />
+      <textarea
+        className="html-display"
+        value={tableHTML}
+        readOnly
+      />
     </div>
   );
 };
