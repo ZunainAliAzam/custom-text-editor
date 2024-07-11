@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import "./TableGenerator.css"
+import "./TableGenerator.css";
 
 const TableGenerator = ({
   rows,
@@ -8,6 +8,7 @@ const TableGenerator = ({
   handleItalic,
   handleUnderline,
   handleFontSizeChange,
+  onTableGenerated,
 }) => {
   const [tableData, setTableData] = useState([]);
   const [selectedCell, setSelectedCell] = useState({ row: 0, col: 0 });
@@ -127,9 +128,13 @@ const TableGenerator = ({
 
   const tableHTML = generateTableHTML();
 
+  const handleGenerateTableClick = () => {
+    onTableGenerated(tableHTML);
+  };
+
   return (
     <div className="table-generator-container">
-      <div className="table-display" contenteditable="true">
+      <div className="table-display">
         <table border="1" style={{ borderCollapse: "collapse" }}>
           <tbody>
             {tableData.map((row, rowIndex) => (
@@ -158,7 +163,7 @@ const TableGenerator = ({
           </tbody>
         </table>
       </div>
-      <textarea className="html-display" value={tableHTML} readOnly />
+      <button onClick={handleGenerateTableClick}>Generate Table</button>
     </div>
   );
 };
