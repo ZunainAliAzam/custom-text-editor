@@ -9,6 +9,8 @@ const TextEditor = () => {
   const [htmlContent, setHtmlContent] = useState("");
   const editorRef = useRef(null);
   const [selection, setSelection] = useState(null);
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0 });
+  const [contextCell, setContextCell] = useState(null);
 
   useEffect(() => {
     document.addEventListener("selectionchange", () => {
@@ -17,6 +19,13 @@ const TextEditor = () => {
         setSelection(selection);
       }
     });
+
+    const handleClick = () => setContextMenu({ visible: false, x: 0, y: 0 });
+    document.addEventListener("click", handleClick);
+
+    return () => {
+      document.removeEventListener("click", handleClick);
+    };
   }, []);
 
   const applyStyle = (style) => {
@@ -28,10 +37,59 @@ const TextEditor = () => {
     setHtmlContent(editorRef.current.innerHTML);
   };
 
-  const handleBold = () => applyStyle({ fontWeight: "bold" });
-  const handleItalic = () => applyStyle({ fontStyle: "italic" });
-  const handleUnderline = () => applyStyle({ textDecoration: "underline" });
-  const handleFontSizeChange = (size) => applyStyle({ fontSize: `${size}px` });
+  const removeStyle = (styleProperty) => {
+    if (!selection || !selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    const selectedNode = range.commonAncestorContainer;
+
+    if (selectedNode.nodeType === Node.TEXT_NODE) {
+      const parentElement = selectedNode.parentElement;
+      parentElement.style[styleProperty] = "";
+      if (!parentElement.getAttribute('style')) {
+        parentElement.removeAttribute('style');
+      }
+    }
+
+    setHtmlContent(editorRef.current.innerHTML);
+  };
+
+  const isStyleApplied = (styleProperty, value) => {
+    if (!selection || !selection.rangeCount) return false;
+    const range = selection.getRangeAt(0);
+    const selectedNode = range.commonAncestorContainer;
+
+    if (selectedNode.nodeType === Node.TEXT_NODE) {
+      const parentElement = selectedNode.parentElement;
+      return parentElement.style[styleProperty] === value;
+    }
+
+    return false;
+  };
+
+  const handleFontSizeChange = (size) => {size}
+  const handleBold = () => {
+    if (isStyleApplied("fontWeight", "bold")) {
+      removeStyle({fontWeight:"bold"});
+    } else {
+      applyStyle({ fontWeight: "bold" });
+    }
+  };
+
+  const handleItalic = () => {
+    if (isStyleApplied("fontStyle", "italic")) {
+      removeStyle({fontStyle:"italic"});
+    } else {
+      applyStyle({ fontStyle: "italic" });
+    }
+  };
+
+  const handleUnderline = () => {
+    if (isStyleApplied("textDecoration", "underline")) {
+      removeStyle({textDecoration:"underline"});
+    } else {
+      applyStyle({ textDecoration: "underline" });
+    }
+  };
 
   const handleTableGenerated = (rows, columns) => {
     const tableElement = document.createElement("table");
@@ -43,8 +101,12 @@ const TextEditor = () => {
       for (let j = 0; j < columns; j++) {
         const cell = row.insertCell();
         cell.textContent = " ";
+        cell.style.width = "100px";
+        cell.style.height = "50px";
         cell.style.padding = "8px";
         cell.style.border = "1px solid black";
+        cell.contentEditable = true;
+        cell.addEventListener("contextmenu", (e) => handleContextMenu(e, cell));
       }
     }
 
@@ -68,8 +130,6 @@ const TextEditor = () => {
     tempElement.innerHTML = htmlString.trim();
     return tempElement.outerHTML;
   };
-
-  // Add row management functionalities from TableGenerator
 
   const handleKeyDown = (e) => {
     if (!selection || !selection.rangeCount) return;
@@ -95,16 +155,6 @@ const TextEditor = () => {
       case "ArrowLeft":
         moveToCell(rowIndex, colIndex - 1);
         break;
-      case "Enter":
-        e.preventDefault();
-        addRow(selectedCell.parentNode);
-        break;
-      case "Backspace":
-        if (!selectedCell.textContent.trim() && selectedCell.parentNode.rowIndex > 0) {
-          e.preventDefault();
-          deleteRow(selectedCell.parentNode);
-        }
-        break;
       default:
         break;
     }
@@ -112,29 +162,78 @@ const TextEditor = () => {
 
   const moveToCell = (rowIndex, colIndex) => {
     const table = editorRef.current.querySelector("table");
-    if (!table) return;
-    const rows = table.rows;
-    if (rowIndex < 0 || rowIndex >= rows.length) return;
-    const cells = rows[rowIndex].cells;
-    if (colIndex < 0 || colIndex >= cells.length) return;
-    cells[colIndex].focus();
-  };
-
-  const addRow = (currentRow) => {
-    const table = currentRow.parentNode;
-    const newRow = table.insertRow(currentRow.rowIndex + 1);
-    for (let i = 0; i < currentRow.cells.length; i++) {
-      const newCell = newRow.insertCell();
-      newCell.textContent = " ";
-      newCell.style.padding = "8px";
-      newCell.style.border = "1px solid black";
-      newCell.contentEditable = true;
+    if (table) {
+      const row = table.rows[rowIndex];
+      if (row) {
+        const cell = row.cells[colIndex];
+        if (cell) {
+          cell.focus();
+          setSelection(window.getSelection());
+        }
+      }
     }
   };
 
-  const deleteRow = (currentRow) => {
-    const table = currentRow.parentNode;
-    table.deleteRow(currentRow.rowIndex);
+  const handleContextMenu = (e, cell) => {
+    e.preventDefault();
+    setContextCell(cell);
+    setContextMenu({ visible: true, x: e.clientX, y: e.clientY });
+  };
+
+  const deleteRow = () => {
+    if (!contextCell) return;
+    const row = contextCell.parentNode;
+    row.parentNode.removeChild(row);
+    setContextMenu({ visible: false, x: 0, y: 0 });
+    setHtmlContent(editorRef.current.innerHTML);
+  };
+
+  const deleteColumn = () => {
+    if (!contextCell) return;
+    const table = contextCell.closest("table");
+    const colIndex = contextCell.cellIndex;
+    for (const row of table.rows) {
+      row.deleteCell(colIndex);
+    }
+    setContextMenu({ visible: false, x: 0, y: 0 });
+    setHtmlContent(editorRef.current.innerHTML);
+  };
+
+  const addRow = () => {
+    if (!contextCell) return;
+    const table = contextCell.closest("table");
+    const rowIndex = contextCell.parentNode.rowIndex;
+    const newRow = table.insertRow(rowIndex + 1);
+    for (let i = 0; i < table.rows[0].cells.length; i++) {
+      const newCell = newRow.insertCell();
+      newCell.textContent = " ";
+      newCell.style.width = "100px";
+      newCell.style.height = "50px";
+      newCell.style.padding = "8px";
+      newCell.style.border = "1px solid black";
+      newCell.contentEditable = true;
+      newCell.addEventListener("contextmenu", (e) => handleContextMenu(e, newCell));
+    }
+    setContextMenu({ visible: false, x: 0, y: 0 });
+    setHtmlContent(editorRef.current.innerHTML);
+  };
+
+  const addColumn = () => {
+    if (!contextCell) return;
+    const table = contextCell.closest("table");
+    const colIndex = contextCell.cellIndex;
+    for (const row of table.rows) {
+      const newCell = row.insertCell(colIndex + 1);
+      newCell.textContent = " ";
+      newCell.style.width = "100px";
+      newCell.style.height = "50px";
+      newCell.style.padding = "8px";
+      newCell.style.border = "1px solid black";
+      newCell.contentEditable = true;
+      newCell.addEventListener("contextmenu", (e) => handleContextMenu(e, newCell));
+    }
+    setContextMenu({ visible: false, x: 0, y: 0 });
+    setHtmlContent(editorRef.current.innerHTML);
   };
 
   return (
@@ -186,6 +285,18 @@ const TextEditor = () => {
       >
         {formatHtml(htmlContent)}
       </pre>
+
+      {contextMenu.visible && (
+        <div
+          className="context-menu"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+        >
+          <button onClick={addRow}>Add Row</button>
+          <button onClick={addColumn}>Add Column</button>
+          <button onClick={deleteRow}>Delete Row</button>
+          <button onClick={deleteColumn}>Delete Column</button>
+        </div>
+      )}
     </div>
   );
 };
